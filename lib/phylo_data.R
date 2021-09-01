@@ -6,4 +6,4 @@
 ## we want only the human
 phylo <- readRDS("data/phylo_list_unrarefied_frontiers.RDS")
 
-# Rarefy as done in the original paper
+# Rarefy as done in the original paper (10,000 across all data sets)
