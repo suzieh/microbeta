@@ -6,15 +6,15 @@
 
 ##### Set Up #####
 source('/project/flatiron2/suzie/detrending/fake/lgd_source.r')
-current_dir <- "/project/flatiron2/suzie/detrending/humangut/"
+current_dir <- "~/Desktop/microbeta/data"
 library(geiger)
 library(phyloseq)
 
 
 ##### Load Data #####
-dat_hg <- read.delim(paste0(current_dir, "processed_data/421_clean_otus.txt"),
+dat_hg <- read.delim(paste0(current_dir, "global_gut/421_clean_otus.txt"),
                      header=T, sep="\t", quote="\"", row.names=1, comment.char="", as.is=T)
-meta_hg <- read.delim(paste0(current_dir, "processed_data/clean_map.txt"),
+meta_hg <- read.delim(paste0(current_dir, "global_gut/clean_map.txt"),
                    header=T, sep="\t", quote="\"", comment.char="", as.is=T)
 pop_cols <- c("red", "blue", "green") # malawians, usa, venezuelans
 
