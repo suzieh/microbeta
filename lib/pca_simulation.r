@@ -9,7 +9,7 @@
 library(lle)
 library(ggplot2)
 library(ggpubr)
-
+library(gridExtra)
 
 ##### Parse Command Line #####
 # option_list <- list(make_option(c("-i", "--input_table"), type="character",
@@ -57,7 +57,7 @@ plot.pc1 <- function (pc_cmd) {
 ##### Run Principal Components Analysis #####
 # Compute Prinicpal Components with raw data
 pca_out <- prcomp(dat, center=T, scale.=F) # centered at 0, variables scaled to have unit variance 
-screeplot(pca_out) # scree plot (no elbow due to homogenity of data)
+screeplot(pca_out) # scree plot
 # Compute Principal Components in pieces of gradient
 plot_list <- list() #change plot output dims: par(mfrow=c(4,4), oma=c(0,0,0,0), mar=c(2,2,2,2))
 for(grad_len in seq(25, nrow(dat), by=25)) {

@@ -16,8 +16,8 @@ option_list <- list(make_option(c("-g", "--gradient"), type="integer", default=1
                                 help="Length of gradient, starting at 0. [default: 1000]"),
                     make_option(c("-s", "--standard_dev"), type="integer", default=75,
                                 help="Standard deviation of each normal OTU distribution. [default: 75]"),
-                    make_option(c("-n", "--num_samples"), type="integer", default=200,
-                                help="Number of samples (will be doubled with noise). [default: 200]"),
+                    make_option(c("-n", "--num_samples"), type="integer", default=50,
+                                help="Number of samples (will be doubled with noise). [default: 50]"),
                     make_option(c("-o", "--out_dir"), type="character",
                                 help="File path for output directory. [required]"),
                     make_option(c("-v", "--visuals"), type="logical", default=TRUE,
@@ -41,8 +41,8 @@ if (!dir.exists(out_dir)) {
 # Create otu set
 m <- 1000 # max gradient length - hard coded for simplicity
 xvals <- seq(-(4*sd), m+(4*sd), by=sd/4)[-1]  # ensures 0 to m in figure is flat
-x <- sapply(xvals, function (x) {dnorm(seq(0,m,1), x, sd)})  # create null distributions
-x[abs(x) < 0.00001] <- 0  # remove otu entirely at tails
+x <- sapply(xvals, function (x) {dnorm(seq(0,m,1), x, sd)*100})  # create null distributions
+x[abs(x) < 0.001] <- 0  # remove otu entirely at tails
 x <- sweep(x, 1, rowSums(x), "/")  # normalize rows (i.e. possible sample combinations)
 x <- x[,-which(colSums(x) == 0)] # remove buffer otus
 
@@ -50,8 +50,9 @@ x <- x[,-which(colSums(x) == 0)] # remove buffer otus
 ##### Choose Samples #####
 inds <- round(seq(0, g, length.out=(n+2)))[-c(1,n+2)] # evenly selects samples along distribution
 dat <- as.data.frame(x[inds,])
+dat <- dat[,-which(colSums(dat) == 0)]
 rownames(dat) <- paste0("sample.", rownames(dat))
-colnames(dat) <- gsub("V", "otu.", colnames(dat))
+colnames(dat) <- paste0("otu.", 1:ncol(dat))
 
 
 ##### Add Noise #####
@@ -59,8 +60,12 @@ colnames(dat) <- gsub("V", "otu.", colnames(dat))
 # note: does not randomly add other otus not in actual sample,
 #       may want to add this feature to increase noise later
 conf <- 100 # confidence factor - higher means noise is closer to actual sample
-noise <- t(apply(dat, 1, function (x) rdirichlet(1, x*conf))) # use each sample as its own prior
+noise <- as.data.frame(t(apply(dat, 1, function (x) colMeans(rdirichlet(100, x*conf))))) # use each sample as its own prior
 colnames(noise) <- colnames(dat)
+# par(mar=c(5.1, 4.1, 4.1, 4.1))
+# plot(as.matrix(dat)*100, col = viridis)
+# plot(as.matrix(noise)*100, col = viridis)
+# par(mar=c(5.1, 4.1, 4.1, 2.1))
 dat <- rbind(dat, noise)
 
 
