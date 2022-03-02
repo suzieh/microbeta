@@ -3,6 +3,7 @@
 # Knights Lab - University of Minnesota
 # September 2019
 # usage : lgd_humangut.r
+# note that this and the lgd_simulation.r file need more tinkering!
 
 ##### Set Up #####
 source('/project/flatiron2/suzie/detrending/fake/lgd_source.r')

@@ -10,26 +10,28 @@ source('~/Desktop/microbeta/lib/lgd_source.r')
 library(vegan)
 library(ggplot2)
 library(viridis)
-
-
 current_dir = "~/Desktop/microbeta/"
 
+
 ##### Helpful functions #####
-plot_dim12 <- function (pc_cmd) {
+plot_dim12 <- function (pc_cmd, title, flip_dim1=F, flip_dim2=F) {
   pc_cmd <- as.data.frame(pc_cmd)
   colnames(pc_cmd)[1:2] <- c("Dim1", "Dim2")
   pc_cmd$color <- 1:nrow(pc_cmd)
   pc_cmd$sample <- as.numeric(gsub("sample.", "", 1:nrow(pc_cmd)))
-  pc_cmd$Dim1 <- -pc_cmd$Dim1
-  pc_cmd$Dim2 <- -pc_cmd$Dim2
+  if (flip_dim1) { pc_cmd$Dim1 <- -pc_cmd$Dim1 }
+  if (flip_dim2) { pc_cmd$Dim2 <- -pc_cmd$Dim2 }
   p <- ggplot(pc_cmd, aes(x=Dim1, y=Dim2, color=factor(color))) +
-    geom_point(size = 4) +
+    geom_point(size = 6, alpha=0.6) +
     scale_color_manual(values = unname(colors[rownames(pc_cmd)])) +
-    labs(title = "", x = "Dimension 1", y = "Dimension 2") + 
+    labs(title = title, x = "Dimension 1", y = "Dimension 2") + 
     theme_classic() + 
-    theme(legend.position = 'none')
+    lims(y = c(-2.4,2.4)) +
+    theme(legend.position = 'none',
+          plot.title = element_text(size=18, face="bold", hjust = 0.5))
   return(p)
 }
+
 
 ##### Loading Data #####
 dat_all <- read.delim(paste0(current_dir, "data/sim_gradient/fake_rel_abun_long.txt"), sep="\t", header=T)
@@ -37,11 +39,25 @@ dat <- dat_all[c(rbind(seq(1,50,1),seq(51,100,1))),] # rearranging to have noise
 colors <- viridis(nrow(dat))
 names(colors) <- rownames(dat)
 
-##### Distance #####
+
+##### Distance & Distance Comparisons (density plot) #####
+d <- vegdist(dat, method="bray")
+plot(density(d), main="Density of Original Distances", col="blue", lwd = 3)
+lgd <- lg.dist(d,neighborhood.radius=0.6,weighted=TRUE)
+plot(density(lgd), main="Density of LGD Distances", col="purple", lwd = 3)
 
 ##### LGD #####
+# PCoA of original distances
+pc.d <- cmdscale(d)
+# PCoA of transformed distances
+pc.lgd <- cmdscale(lgd)
+# Plot original PCoA
+plot(pc.d, xlim=range(pc.d), ylim=range(pc.d), main="Original Distances")
+plot_dim12(pc.d, "Original Distances", flip_dim1 = T)
+# Plot transformed distances PCoA
+plot(pc.lgd, xlim=range(pc.d), ylim=range(pc.d), main="Transformed Distances")
+plot_dim12(pc.lgd, "Transformed Distances")
 
-##### Compare distances #####
 
 
 
