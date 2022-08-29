@@ -25,17 +25,27 @@
     ns <- neighborhood.sizes[ix]
     g <- lg.graph(d, neighborhood.size=ns, use.r= use.r, weighted=weighted)
     eigs <- eigen(graph.laplacian(g),only.values=TRUE)$values
-    is.valid <- sum(eigs < 10 * .Machine$double.eps) == 1
+    is.valid <- sum(eigs < 10 * .Machine$double.eps) == 1   # one way to test validity (one eigen val = 0)
+    if (!is.valid) {
+      is.valid <- clusters(g)$no == 1                       # another validity test (only one cluster, thus fully connected)
+    }
     ix <- ix + 1
   }
   # note: connect graph if still invalid
   if (!is.valid) {
     g <- greedy.connect(d, g, neighborhood.sizes[ix-1])
     eigs <- eigen(graph.laplacian(g),only.values=TRUE)$values
-    is.valid <- sum(eigs < 10 * .Machine$double.eps) == 1
+    is.valid <- sum(eigs < 10 * .Machine$double.eps) == 1   # one way to test validity (one eigen val = 0)
+    if (!is.valid) {
+      is.valid <- clusters(g)$no == 1                       # another validity test (only one cluster, thus fully connected)
+    }
   }
   # note: return dist object
   lgd <- shortest.paths(g)
+  png(paste0("results/igraphs_gif/r_",round(neighborhood.radius,4),".png"), width=600, height=600)
+  plot(g, vertex.label=NA, vertex.color="purple", vertex.size=8,
+       main=paste0("r = ", round(neighborhood.radius,4)))
+  dev.off()
   if (is.null(lgd)) {warning("Resulted in null graph."); return(NULL);}
   return(lgd)
 }
@@ -58,11 +68,18 @@
 "greedy.connect" <- function (d, g, ns) {
   # note: greedily connects disconnected components with minimum distance between components
   # note: prints warning to output to notify user of this operation
-  dc <- split(1:nrow(as.matrix(d)), components(g)$membership)
-  mstree <- graph.adjacency(mst(d), weighted=TRUE, mode='undirected')
+  #dc <- split(1:nrow(as.matrix(d)), components(g)$membership)
+  og <- graph.adjacency(as.matrix(d), weighted=T, mode='undirected')
+  mstree <- mst(og) #graph.adjacency(mst(d), weighted=TRUE, mode='undirected')
   me <- split(as_edgelist(mstree), seq(gsize(mstree))); ge <- split(as_edgelist(g), seq(gsize(g)));
   new_edges <- unname(unlist(me[!(me %in% ge)]))
-  w <- d[sapply(seq(1,length(new_edges),2), function (i) return((which(rownames(d) == new_edges[i])-1)*nrow(d)+which(colnames(d) == new_edges[i+1])))]
+  d_idx <- sapply(seq(1,length(new_edges),2), function (i) {
+    tmpd <- as.matrix(d)
+    a <- which(rownames(tmpd) == new_edges[i])    # get row idx
+    b <- which(colnames(tmpd) == new_edges[i+1])  # get column index
+    return(c(a, b))
+  })
+  w <- sapply(1:ncol(d_idx), function (i) {as.matrix(d)[d_idx[1,i], d_idx[2,i]]})
   warning(paste0("Disconnected graph with given neighborhood size (", ns, "). Adding ", length(new_edges)/2, " edges."), call.=FALSE)
   if (any(w > 2*max(E(g)$weight))) warning("Some added edge weights exceed twice length of neighborhood edges.")
   g <- add_edges(g, new_edges, attr = list("weight"=w))

@@ -17,7 +17,7 @@
 library(vegan)
 library(ggplot2)
 require('igraph', warn.conflicts=FALSE, quietly=TRUE) # load package quietly
-dat <- read.delim("/project/flatiron2/suzie/detrending/fake/fake_rel_abun_long.txt", sep="\t", header=T)
+dat <- read.delim("data/sim_gradient/fake_rel_abun_long.txt", sep="\t", header=T)
 dat <- round(dat[c(5,10,15,20, 45,50,52,55, 75,82,88,90,92,96),]*10000) # select interesting set, convert to counts
 rownames(dat) <- paste0("sample.", 1:nrow(dat))
 
@@ -25,8 +25,10 @@ rownames(dat) <- paste0("sample.", 1:nrow(dat))
 ##### N-based LGD #####
 # Parameters
 d <- vegdist(dat)
-neighborhood.size = 3
-neighborhood.radius = NULL
+min(d)
+max(d)
+neighborhood.size = NULL
+neighborhood.radius = 0.43
 weighted = TRUE
 
 # Function Contents
@@ -40,7 +42,6 @@ if(is.null(neighborhood.size) && is.null(neighborhood.radius)){
   neighborhood.sizes <- neighborhood.radius
   use.r <- TRUE
 }
-# WITH CURRENT PARAMS: n.ss = 3, use.r = F
 
 # step 2/3: create graph, check validity (components)
 #   calculate number of eigenvalues == 0 in graph;
@@ -65,17 +66,21 @@ while(ix <= length(neighborhood.sizes) && !is.valid){
   g <- graph.adjacency(adj, weighted=weighted, mode='undirected')
   # end of lg.graph
   eigs <- eigen(graph.laplacian(g),only.values=TRUE)$values
-  is.valid <- sum(eigs < 10 * .Machine$double.eps) == 1
+  is.valid <- sum(eigs < 10 * .Machine$double.eps) == 1   # one way to test validity (one eigen val = 0)
+  if (!is.valid) {
+    is.valid <- clusters(g)$no == 1                       # another validity test (only one cluster, thus fully connected)
+  }
   ix <- ix + 1
 }
 
-# step 4: greedily add bridge if invalid. Need to throw a
+# step 4: greedily add bridge(s) if invalid. Need to throw a
 # warning if bridge added is more than twice the length
 # of a local edge (!)
 if (!is.valid) {
   # start of greedy.connect
-  dc <- split(1:nrow(as.matrix(d)), components(g)$membership)
-  mstree <- graph.adjacency(mst(d), weighted=TRUE, mode='undirected')
+  #dc <- split(1:nrow(as.matrix(d)), components(g)$membership)          # list of graph disconnected components
+  og <- graph.adjacency(as.matrix(d), weighted=T, mode='undirected')   # original full graph (no LGD)
+  mstree <- mst(og) #graph.adjacency(mst(og), weighted=TRUE, mode='undirected') # minimum spanning tree
   me <- split(as_edgelist(mstree), seq(gsize(mstree))); ge <- split(as_edgelist(g), seq(gsize(g)));
   new_edges <- unname(unlist(me[!(me %in% ge)]))
   w <- d[sapply(seq(1,length(new_edges),2), function (i) return((which(rownames(d) == new_edges[i])-1)*nrow(d)+which(colnames(d) == new_edges[i+1])))]
@@ -84,7 +89,10 @@ if (!is.valid) {
   g <- add_edges(g, new_edges, attr = list("weight"=w))
   # end of greedy.connect
   eigs <- eigen(graph.laplacian(g),only.values=TRUE)$values
-  is.valid <- sum(eigs < 10 * .Machine$double.eps) == 1
+  is.valid <- sum(eigs < 10 * .Machine$double.eps) == 1  # one way to test validity (one eigen val = 0)
+  if (!is.valid) {
+    is.valid <- clusters(g)$no == 1 # another validity test (only one cluster, thus fully connected)
+  }
 }
 # return distance matrix based on this graph
 lgd <- shortest.paths(g)
