@@ -42,10 +42,10 @@
   }
   # note: return dist object
   lgd <- shortest.paths(g)
-  png(paste0("results/igraphs_gif/r_",round(neighborhood.radius,4),".png"), width=600, height=600)
-  plot(g, vertex.label=NA, vertex.color="purple", vertex.size=8,
-       main=paste0("r = ", round(neighborhood.radius,4)))
-  dev.off()
+  # png(paste0("results/igraphs_gif/r_",round(neighborhood.radius,4),".png"), width=600, height=600)
+  # plot(g, vertex.label=NA, vertex.color="purple", vertex.size=8,
+  #      main=paste0("r = ", round(neighborhood.radius,4)))
+  # dev.off()
   if (is.null(lgd)) {warning("Resulted in null graph."); return(NULL);}
   return(lgd)
 }
