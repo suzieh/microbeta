@@ -10,11 +10,12 @@ source('~/Desktop/microbeta/lib/lgd_source.r')
 library(vegan)
 library(ggplot2)
 library(viridis)
+library(igraph)
 current_dir = "~/Desktop/microbeta/"
 
 
 ##### Helpful functions #####
-plot_dim12 <- function (pc_cmd, title, flip_dim1=F, flip_dim2=F) {
+plot_dim12 <- function (pc_cmd, title, ylims, flip_dim1=F, flip_dim2=F) {
   pc_cmd <- as.data.frame(pc_cmd)
   colnames(pc_cmd)[1:2] <- c("Dim1", "Dim2")
   pc_cmd$color <- 1:nrow(pc_cmd)
@@ -26,7 +27,7 @@ plot_dim12 <- function (pc_cmd, title, flip_dim1=F, flip_dim2=F) {
     scale_color_manual(values = unname(colors[rownames(pc_cmd)])) +
     labs(title = title, x = "Dimension 1", y = "Dimension 2") + 
     theme_classic() + 
-    lims(y = c(-2.4,2.4)) +
+    lims(y = ylims) +
     theme(legend.position = 'none',
           plot.title = element_text(size=18, face="bold", hjust = 0.5))
   return(p)
@@ -43,7 +44,7 @@ names(colors) <- rownames(dat)
 ##### Distance & Distance Comparisons (density plot) #####
 d <- vegdist(dat, method="bray")
 plot(density(d), main="Density of Original Distances", col="blue", lwd = 3)
-lgd <- lg.dist(d,neighborhood.radius=0.6,weighted=TRUE)
+lgd <- lg.dist(d,neighborhood.radius=0.2,weighted=TRUE)
 plot(density(lgd), main="Density of LGD Distances", col="purple", lwd = 3)
 
 ##### LGD #####
@@ -53,10 +54,10 @@ pc.d <- cmdscale(d)
 pc.lgd <- cmdscale(lgd)
 # Plot original PCoA
 plot(pc.d, xlim=range(pc.d), ylim=range(pc.d), main="Original Distances")
-plot_dim12(pc.d, "Original Distances", flip_dim1 = T)
+plot_dim12(pc.d, "Original Distances", ylims = range(pc.d[,2]), flip_dim1 = T)
 # Plot transformed distances PCoA
-plot(pc.lgd, xlim=range(pc.d), ylim=range(pc.d), main="Transformed Distances")
-plot_dim12(pc.lgd, "Transformed Distances")
+plot(pc.lgd, xlim=range(pc.lgd), ylim=range(pc.d), main="Transformed Distances")
+plot_dim12(pc.lgd, "Transformed Distances", ylims = range(pc.d[,2]))
 
 
 
