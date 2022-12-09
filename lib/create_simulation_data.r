@@ -59,9 +59,10 @@ colnames(dat) <- paste0("otu.", 1:ncol(dat))
 # Dirichlet per "actual" sample
 # note: does not randomly add other otus not in actual sample,
 #       may want to add this feature to increase noise later
-conf <- 100 # confidence factor - higher means noise is closer to actual sample
+conf <- 0.2 # confidence factor - higher means noise is closer to actual sample
 noise <- as.data.frame(t(apply(dat, 1, function (x) colMeans(rdirichlet(100, x*conf))))) # use each sample as its own prior
 colnames(noise) <- colnames(dat)
+rownames(noise) <- paste0("sample.n",seq(1,nrow(noise),1))
 # par(mar=c(5.1, 4.1, 4.1, 4.1))
 # plot(as.matrix(dat)*100, col = viridis)
 # plot(as.matrix(noise)*100, col = viridis)
@@ -70,9 +71,12 @@ dat <- rbind(dat, noise)
 
 
 ##### Visualize Dataset #####
+# Set number of coenoclines visualized
+nv <- ncol(dat)/15   # every nv-th otu coenocline
+
 # Adjust colors
 if(opts$color_viridis) {
-  colors <- viridis::viridis((ncol(x) - 4) / 8)
+  colors <- viridis::viridis((ncol(x) - 4) / nv)
 } else {
   colors <- c("#000000", "#800000", "#3cb44b", "#911eb4", "#e6194B",
               "#469990", "#f032e6", "#f58231", "#808000", "#000075") }
@@ -81,11 +85,13 @@ len <- ifelse(g > m/2, "long", "medium")
 len <- ifelse(g < m/4, "short", len)
 # Coenoclines plot function
 plot_coenoclines <- function (df, len) {
-  png(paste0(out_dir, "coenoclines_", len, ".png"), width=600, height=400, bg = "transparent")
+  m_df <- df
+  m_df[m_df == 0] <- NA
+  png(paste0(out_dir, "coenoclines_", len, ".png"), width=624, height=416, res=96) # bg = "transparent")
   par(mgp=c(0.8, 0, 0))
-  matplot(df, type="l", col=colors, lty=1, lwd=24, xlim=c(0,m),
-          ylab="relative abundance", xlab="gradient",
-          cex.lab=2.4, xaxt="n", yaxt="n")
+  matplot(m_df, type="l", col=colors, lty=1, lwd=15, xlim=c(0,m),
+          ylab="relative abundances", xlab="gradient",
+          cex.lab=1.8, xaxt="n", yaxt="n")
   dev.off()
   return(TRUE)
 }
@@ -103,7 +109,7 @@ plot_sample_pie <- function (df, samp) {
           panel.background = element_rect(fill = "transparent",colour = NA),
           plot.background = element_rect(fill = "transparent",colour = NA)) + NULL
   p
-  ggsave(paste0(out_dir, "pie_", samp, ".png"), width=4, height=4, units="in", device="png", bg="transparent")
+  ggsave(paste0(out_dir, "pie_", samp, ".png"), width=48, height=48, units="px", device="png", bg="transparent", dpi=96)
   return(ifelse(is.null(p), FALSE, TRUE))
 }
 # Print out visuals
@@ -113,7 +119,7 @@ if (v) {
   # coenocline plot (size: 600x400)
   rx <- x[,colSums(dat) > 0] # restrict to otus in present sampling
   rx[g:nrow(rx),] <- NA # cut off otus after current gradient end
-  plot_coenoclines(rx[,seq(2, ncol(rx)-2, by=8)], len) # every 8th coenocline
+  plot_coenoclines(rx[,seq(2, ncol(rx)-2, by=nv)], len)   # by: print every nth coenocline
   # sample pie charts (size: 400x400)
   plot_sample_pie(dat[1,], "start") # first sample pie
   plot_sample_pie(dat[nrow(dat)/4,], "mid") # midpoint sample pie

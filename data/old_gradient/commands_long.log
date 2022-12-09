@@ -1,6 +1,6 @@
 -g --gradient			1000
--s --standard-dev		50
+-s --standard-dev		75
 -n --num_samples		50
--o --out_dir			data/sim_gradient/
+-o --out_dir			../data/sim_gradient/
 -v --visuals			TRUE
 -c --color_viridis		TRUE
