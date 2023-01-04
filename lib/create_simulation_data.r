@@ -18,6 +18,8 @@ option_list <- list(make_option(c("-g", "--gradient"), type="integer", default=1
                                 help="Standard deviation of each normal OTU distribution. [default: 75]"),
                     make_option(c("-n", "--num_samples"), type="integer", default=50,
                                 help="Number of samples (will be doubled with noise). [default: 50]"),
+                    make_option(c("-d", "--dirichlet_val"), type="double", default=0.2,
+                                help="Dirichlet confidence factor, higher is closer to real data . [default: 0.2]"),
                     make_option(c("-o", "--out_dir"), type="character",
                                 help="File path for output directory. [required]"),
                     make_option(c("-v", "--visuals"), type="logical", default=TRUE,
@@ -28,6 +30,7 @@ opts <- parse_args(OptionParser(option_list=option_list), args=commandArgs(trail
 g <- opts$gradient
 sd <- opts$standard_dev
 n <- opts$num_samples
+conf <- opts$dirichlet_val
 v <- opts$visuals
 out_dir <- opts$out_dir
 if (!dir.exists(out_dir)) {
@@ -59,7 +62,7 @@ colnames(dat) <- paste0("otu.", 1:ncol(dat))
 # Dirichlet per "actual" sample
 # note: does not randomly add other otus not in actual sample,
 #       may want to add this feature to increase noise later
-conf <- 0.2 # confidence factor - higher means noise is closer to actual sample
+# [conf] confidence factor is in options - higher means noise is closer to actual sample
 noise <- as.data.frame(t(apply(dat, 1, function (x) colMeans(rdirichlet(100, x*conf))))) # use each sample as its own prior
 colnames(noise) <- colnames(dat)
 rownames(noise) <- paste0("sample.n",seq(1,nrow(noise),1))

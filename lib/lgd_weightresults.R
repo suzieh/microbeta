@@ -1,8 +1,15 @@
 # Playing around with weighting results of LGD
 # Effectively smoothing results
 library(rdd)
+library(vegan)
+library(scales)
 source("lib/lgd_source.r")
 set.seed(25)
+
+# Noisy simulated data?
+noisy_sim <- TRUE
+# Distance for simulated data?
+dist_for_sim <- "euclidean"
 
 ##### Helper Functions #####
 # Applying LGD to multiple r values
@@ -29,7 +36,7 @@ get_lgd <- function (d, grad) {
     # determine best r value
     curr_val <- round(cor(grad_dists, lg_d, method="pearson"),4)
     if (is.na(curr_val)) {curr_val <- 0}
-    if (curr_val >= bestval) {
+    if (curr_val > bestval) {
       print(paste0("  --> new best r found, corr w/ gradient = ", curr_val))
       bestidx <- i
       bestval <- curr_val
@@ -51,22 +58,32 @@ calc.perc.var <- function (eigen, dimension) {
 plot_pcoa <- function (d, mycols, mybor, myshp=16, mytitle) {
   # calculate pcoa
   pc <- cmdscale(d, k=2, eig=T)
+  # make sure plot is square (set x and y limits to the same)
+  minlim <- min(pc$points[,1:2])
+  maxlim <- max(pc$points[,1:2])
   # plot
-  plot(pc$points,
-       col=mycols, bg=mybor, pch=myshp, cex=2, lwd=3,
+  plot(pc$points, xlim=c(minlim, maxlim), ylim=c(minlim, maxlim),
+       col=mycols, bg=mybor, pch=myshp, cex=3, lwd=3,
        xlab=paste0("PC1 [", calc.perc.var(pc$eig,1), "%]"),
        ylab=paste0("PC2 [", calc.perc.var(pc$eig,2), "%]"), cex.lab=2)
   title(mytitle, adj=0, cex.main=2)
 }
 
 
+
 ##### Set Up & Data Loading #####
-# simulated data - Chi-Sq distances
+# simulated data - Chosen distances
 sim_n <- read.table("data/sim_gradient/fake_rel_abun_g1000_sd50_n50.txt", row=1, header=T, sep="\t")
 meta_sim <- data.frame(SampleID=rownames(sim_n), noise=c(rep("n",50),rep("y",50)),
                        gradient=rep(round(seq(1,1000,length.out=50)),2))
-sim_cols <- rep(viridis::viridis(50, alpha=0.8),2)
-sim_d <- vegdist(sim_n, method="euclidean")
+sim_cols <- alpha(rep(viridis::viridis(50, alpha=0.8),2),0.7)
+if (noisy_sim == TRUE) {
+  sim_d <- vegdist(sim_n, method=dist_for_sim)
+} else {
+  sim_d <- vegdist(sim_n[1:50,], method=dist_for_sim)
+  meta_sim <- meta_sim[1:50,]
+  sim_cols <- sim_cols[1:50]
+}
 
 # soil data - Jaccard distances
 meta_soil <- read.table("data/soil/clean_map.txt", header=T, sep="\t")
@@ -80,10 +97,12 @@ ord <- cut(meta_soil$ph, breaks = c(0,4:8,14)) # pH groups (<4, 4-5, 5-6, 6-7, 7
 soil_cols <- soil_col1[ord]; soil_bors <- soil_bg1[ord]; soil_shps <- soil_shp1[ord];
 
 
+
+##### USING LGD #####
 # LGD applied to simulated data (see helper function for current implementation)
 sim_out <- get_lgd(sim_d, meta_sim$gradient) # best r: 0.187 w/ corr 0.9993
 sim_lgdlist <- sim_out$lgdlist
-sim_bestidx <- 2 # sim_out$bestidx
+sim_bestidx <- sim_out$bestidx
 sim_rvals <- sim_out$rvals
 
 # LGD applied to soil data (see helper function for current implementation)
@@ -93,18 +112,19 @@ soil_bestidx <- soil_out$bestidx
 soil_rvals <- soil_out$rvals
 
 
+
 ##### Gaussian weight #####
 # Function(s) for applying a gaussian weight to get output
-get_wts <- function (rvals, bestidx) {
+get_wts <- function (rvals, bestidx, title="provided data") {
   # Determine weights centered on best r index provided, return weights
   wts <- kernelwts(1:length(rvals), center=bestidx, bw=4, kernel="gaussian")
-  plot(rvals, wts, main="Weights", pch=16, cex=3)
+  plot(rvals, wts, main=paste0("Weights: ", title), pch=16, cex=3)
   return(wts)
 }
-get_wmeans <- function (lgdlist, bestidx, rvals) {
+get_wmeans <- function (lgdlist, bestidx, rvals, title="provided data") {
   # Determine new distances as weighted mean of other r distance outputs
   ## (1) get weights centered at best r index
-  wts <- get_wts(rvals, bestidx)
+  wts <- get_wts(rvals, bestidx, title)
   ## (2) per pairwise distance, get weighted mean
   means <- lgdlist[[1]]    # temporarily set means to first distance object
   for (i in 1:length(lgdlist[[1]])) {
@@ -116,33 +136,33 @@ get_wmeans <- function (lgdlist, bestidx, rvals) {
 }
 
 # Calculate weighted means of all pairwise distances
-wtd_sim <- get_wmeans(sim_lgdlist, sim_bestidx, sim_rvals)
-wtd_soil <- get_wmeans(soil_lgdlist, soil_bestidx, soil_rvals)
+wtd_sim <- get_wmeans(sim_lgdlist, sim_bestidx, sim_rvals, "simulated data")
+wtd_soil <- get_wmeans(soil_lgdlist, soil_bestidx, soil_rvals, "soil")
 
 
 
 ##### Plots comparing outputs #####
 # Simulated Data
 ## 3 plots : no lgd, best lgd, smoothed lgd
-par(mfrow=c(1,3))
+par(mfrow=c(1,3),mgp=c(2.5, 1, 0))
 plot_pcoa(sim_d, sim_cols, sim_cols, 16, "Simulated Data")
 plot_pcoa(as.dist(lg.dist(sim_d, neighborhood.radius=sim_rvals[sim_bestidx])),
           sim_cols, sim_cols, 16, "LGD (one radius)")
 plot_pcoa(wtd_sim, sim_cols, sim_cols, 16, "Smoothed LGD")
-par(mfrow=c(1,1))
+par(mfrow=c(1,1),mgp=c(3, 1, 0))
 
 # Soil Data
 ## 3 plots : no lgd, best lgd, smoothed lgd
-par(mfrow=c(1,3))
+par(mfrow=c(1,3),mgp=c(2.5, 1, 0))
 plot_pcoa(soil_d, soil_cols, soil_bors, soil_shps, "Simulated Data")
 plot_pcoa(as.dist(lg.dist(soil_d, neighborhood.radius=soil_rvals[soil_bestidx])),
           soil_cols, soil_bors, soil_shps, "LGD (one radius)")
 plot_pcoa(wtd_soil, soil_cols, soil_bors, soil_shps, "Smoothed LGD")
-par(mfrow=c(1,1))
+par(mfrow=c(1,1),mgp=c(3, 1, 0))
 # running into a problem here! For some reason the soil data set has infinte values
-#.  discovered one of the problems was a bad sample (BB1) which only had one sequence count,
-#.  but now maybe HI1 is having a problem too and IDK why... shouldn't get infinite
-#.  values from this...
+#   discovered one of the problems was a bad sample (BB1) which only had one sequence count,
+#   but now maybe HI1 is having a problem too and IDK why... shouldn't get infinite
+#   values from this...
 
 
 
