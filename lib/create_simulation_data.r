@@ -140,6 +140,7 @@ fileConn<-file(paste0(out_dir, "commands_", len, ".log"))
 writeLines(c(paste0("-g --gradient\t\t\t", g),
              paste0("-s --standard-dev\t\t", sd),
              paste0("-n --num_samples\t\t", n),
+             paste0("-d --dirichlet_val\t\t", conf),
              paste0("-o --out_dir\t\t\t", out_dir),
              paste0("-v --visuals\t\t\t", v),
              paste0("-c --color_viridis\t\t", opts$color_viridis)), fileConn)

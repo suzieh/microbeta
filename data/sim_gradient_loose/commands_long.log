@@ -1,7 +1,7 @@
 -g --gradient			1000
 -s --standard-dev		50
 -n --num_samples		50
--d --dirichlet_val		0.2
--o --out_dir			data/sim_gradient/
--v --visuals			TRUE
+-d --dirichlet_val		0.1
+-o --out_dir			data/sim_gradient_loose/
+-v --visuals			FALSE
 -c --color_viridis		TRUE
