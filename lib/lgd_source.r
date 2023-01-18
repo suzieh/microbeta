@@ -1,7 +1,7 @@
 # lgd_source.r
 # Local Gradient Distance
 # Knights Lab - University of Minnesota
-# August 2019
+# Created August 2019
 # usage : source('lgd_source.r')
 
 
@@ -25,9 +25,9 @@
     ns <- neighborhood.sizes[ix]
     g <- lg.graph(d, neighborhood.size=ns, use.r= use.r, weighted=weighted)
     eigs <- eigen(graph.laplacian(g),only.values=TRUE)$values
-    is.valid <- sum(eigs < 10 * .Machine$double.eps) == 1   # one way to test validity (one eigen val = 0)
-    if (!is.valid) {
-      is.valid <- clusters(g)$no == 1                       # another validity test (only one cluster, thus fully connected)
+    if (clusters(g)$no == 1) {
+      is.valid <- TRUE # validity test
+      # note: retired test for one eigenvalue = 0: sum(eigs < 10 * .Machine$double.eps) == 1
     }
     ix <- ix + 1
   }
@@ -35,10 +35,15 @@
   if (!is.valid) {
     g <- greedy.connect(d, g, neighborhood.sizes[ix-1])
     eigs <- eigen(graph.laplacian(g),only.values=TRUE)$values
-    is.valid <- sum(eigs < 10 * .Machine$double.eps) == 1   # one way to test validity (one eigen val = 0)
-    if (!is.valid) {
-      is.valid <- clusters(g)$no == 1                       # another validity test (only one cluster, thus fully connected)
+    if (clusters(g)$no == 1) {
+      is.valid <- TRUE # validity test
+      # note: retired test for one eigenvalue = 0: sum(eigs < 10 * .Machine$double.eps) == 1
     }
+    # previously
+    # is.valid <- sum(eigs < 10 * .Machine$double.eps) == 1   # validity test (one eigen val = 0)
+    # if (!is.valid) {
+    #   is.valid <- clusters(g)$no == 1                       # validity test (only one cluster, thus fully connected)
+    # }
   }
   # note: return dist object
   lgd <- shortest.paths(g)

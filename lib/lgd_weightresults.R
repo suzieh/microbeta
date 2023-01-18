@@ -10,12 +10,16 @@ set.seed(25)
 noisy_sim <- TRUE
 # Distance for simulated data?
 dist_for_sim <- "euclidean"
+# Which simulated dataset?
+directory_sim <- "sim_gradient"
+## default: "sim_gradient"
+## other options: "sim_gradient_loosenoise", "sim_gradient_strictnoise"
 
 ##### Helper Functions #####
 # Applying LGD to multiple r values
 get_lgd <- function (d, grad) {
   ## Apply LGD with 25 values of r, get best r index & list of outputs
-  ##  --> currently using best association with real gradient as "best r"
+  ##  --> currently using best corr b/w as "best r"
   ##  --> should also try the biggest right skew
   print("Beginning LGD computation:")
   
@@ -55,9 +59,12 @@ calc.perc.var <- function (eigen, dimension) {
 }
 
 # Plotting PCoA
-plot_pcoa <- function (d, mycols, mybor, myshp=16, mytitle) {
+plot_pcoa <- function (d, mycols, mybor, myshp=16, mytitle, flippc1=F, flippc2=F) {
   # calculate pcoa
   pc <- cmdscale(d, k=2, eig=T)
+  # optionally flip axes
+  if (flippc1) pc$points[,1] <- pc$points[,1] * -1
+  if (flippc2) pc$points[,2] <- pc$points[,2] * -1
   # make sure plot is square (set x and y limits to the same)
   minlim <- min(pc$points[,1:2])
   maxlim <- max(pc$points[,1:2])
@@ -73,7 +80,7 @@ plot_pcoa <- function (d, mycols, mybor, myshp=16, mytitle) {
 
 ##### Set Up & Data Loading #####
 # simulated data - Chosen distances
-sim_n <- read.table("data/sim_gradient/fake_rel_abun_g1000_sd50_n50.txt", row=1, header=T, sep="\t")
+sim_n <- read.table(paste0("data/",directory_sim,"/fake_rel_abun_g1000_sd50_n50.txt"), row=1, header=T, sep="\t")
 meta_sim <- data.frame(SampleID=rownames(sim_n), noise=c(rep("n",50),rep("y",50)),
                        gradient=rep(round(seq(1,1000,length.out=50)),2))
 sim_cols <- alpha(rep(viridis::viridis(50, alpha=0.8),2),0.7)
@@ -100,13 +107,13 @@ soil_cols <- soil_col1[ord]; soil_bors <- soil_bg1[ord]; soil_shps <- soil_shp1[
 
 ##### USING LGD #####
 # LGD applied to simulated data (see helper function for current implementation)
-sim_out <- get_lgd(sim_d, meta_sim$gradient) # best r: 0.187 w/ corr 0.9993
+sim_out <- get_lgd(sim_d, meta_sim$gradient) # best r: 0.1635 w/ corr 0.9996
 sim_lgdlist <- sim_out$lgdlist
 sim_bestidx <- sim_out$bestidx
 sim_rvals <- sim_out$rvals
 
 # LGD applied to soil data (see helper function for current implementation)
-soil_out <- get_lgd(soil_d, meta_soil$ph) # best r: 0.9411 w/ corr 0.7212
+soil_out <- get_lgd(soil_d, meta_soil$ph) # best r: 0.9803 w/ corr 0.7433
 soil_lgdlist <- soil_out$lgdlist
 soil_bestidx <- soil_out$bestidx
 soil_rvals <- soil_out$rvals
@@ -118,7 +125,7 @@ soil_rvals <- soil_out$rvals
 get_wts <- function (rvals, bestidx, title="provided data") {
   # Determine weights centered on best r index provided, return weights
   wts <- kernelwts(1:length(rvals), center=bestidx, bw=4, kernel="gaussian")
-  plot(rvals, wts, main=paste0("Weights: ", title), pch=16, cex=3)
+  plot(rvals, wts, main=paste0("Weights: ", title), pch=16, cex=2.5, xlab="radius value", ylab="weight")
   return(wts)
 }
 get_wmeans <- function (lgdlist, bestidx, rvals, title="provided data") {
@@ -144,8 +151,8 @@ wtd_soil <- get_wmeans(soil_lgdlist, soil_bestidx, soil_rvals, "soil")
 ##### Plots comparing outputs #####
 # Simulated Data
 ## 3 plots : no lgd, best lgd, smoothed lgd
-par(mfrow=c(1,3),mgp=c(2.5, 1, 0))
-plot_pcoa(sim_d, sim_cols, sim_cols, 16, "Simulated Data")
+par(mfrow=c(1,3),mgp=c(2.5, 1, 0)) # saved as 1100x400 png
+plot_pcoa(sim_d, sim_cols, sim_cols, 16, "Simulated Data", flippc1=T)
 plot_pcoa(as.dist(lg.dist(sim_d, neighborhood.radius=sim_rvals[sim_bestidx])),
           sim_cols, sim_cols, 16, "LGD (one radius)")
 plot_pcoa(wtd_sim, sim_cols, sim_cols, 16, "Smoothed LGD")
@@ -154,42 +161,41 @@ par(mfrow=c(1,1),mgp=c(3, 1, 0))
 # Soil Data
 ## 3 plots : no lgd, best lgd, smoothed lgd
 par(mfrow=c(1,3),mgp=c(2.5, 1, 0))
-plot_pcoa(soil_d, soil_cols, soil_bors, soil_shps, "Simulated Data")
+plot_pcoa(soil_d, soil_cols, soil_bors, soil_shps, "Simulated Data", flippc2=T)
 plot_pcoa(as.dist(lg.dist(soil_d, neighborhood.radius=soil_rvals[soil_bestidx])),
-          soil_cols, soil_bors, soil_shps, "LGD (one radius)")
+          soil_cols, soil_bors, soil_shps, "LGD (one radius)", flippc2=T)
 plot_pcoa(wtd_soil, soil_cols, soil_bors, soil_shps, "Smoothed LGD")
 par(mfrow=c(1,1),mgp=c(3, 1, 0))
-# running into a problem here! For some reason the soil data set has infinte values
-#   discovered one of the problems was a bad sample (BB1) which only had one sequence count,
-#   but now maybe HI1 is having a problem too and IDK why... shouldn't get infinite
-#   values from this...
+
+
+
 
 
 
 ##### Testing / Playing Around #####
-# values to get a weighted mean from
-myvals <- c(4,7,5,10,5,8,2,5,9,10,11,12,11,11,10,13,11,12,15,17) # outputs per r
-# Create weights centered at the "best" index
-mybestidx <- 14
-mywts <- kernelwts(1:length(myvals), center=mybestidx, bw=4, kernel="gaussian")
-plot(mywts, main="Weights")
-plot(myvals, main="Values")
-mymn <- weighted.mean(myvals, mywts)
-abline(h=mymn, col="blue", lwd=3, lty="dashed")
+# # values to get a weighted mean from
+# myvals <- c(4,7,5,10,5,8,2,5,9,10,11,12,11,11,10,13,11,12,15,17) # outputs per r
+# # Create weights centered at the "best" index
+# mybestidx <- 14
+# mywts <- kernelwts(1:length(myvals), center=mybestidx, bw=4, kernel="gaussian")
+# plot(mywts, main="Weights")
+# plot(myvals, main="Values")
+# mymn <- weighted.mean(myvals, mywts)
+# abline(h=mymn, col="blue", lwd=3, lty="dashed")
 
 
 
 # For overwriting soil data
-tmp_m <- read.table("data/soil/clean_map.txt", header=T, sep="\t")
-tmp_m <- tmp_m[-which(tmp_m$SampleID %in% c("BB1")),]
-write.table(tmp_m,"data/soil/clean_map.txt", sep="\t", col.names=T, row.names=F)
-
-tmp_n <- read.table("data/soil/44766_clean_otus_norm.txt", row=1, header=T, sep="\t")
-tmp_n <- tmp_n[,tmp_m$SampleID]
-write.table(tmp_n, "data/soil/44766_clean_otus_norm.txt", sep="\t", col.names=T, row.names=T)
-
-tmp_c <- read.table("data/soil/44766_clean_otus.txt", row=1, header=T, sep="\t")
-tmp_c <- tmp_c[,tmp_m$SampleID]
-write.table(tmp_c, "data/soil/44766_clean_otus.txt", sep="\t", col.names=T, row.names=T)
+# tmp_m <- read.table("data/soil/clean_map.txt", header=T, sep="\t")
+# tmp_m <- tmp_m[-which(tmp_m$SampleID %in% c("BB1")),]
+# write.table(tmp_m,"data/soil/clean_map.txt", sep="\t", col.names=T, row.names=F)
+# 
+# tmp_n <- read.table("data/soil/44766_clean_otus_norm.txt", row=1, header=T, sep="\t")
+# tmp_n <- tmp_n[,tmp_m$SampleID]
+# write.table(tmp_n, "data/soil/44766_clean_otus_norm.txt", sep="\t", col.names=T, row.names=T)
+# 
+# tmp_c <- read.table("data/soil/44766_clean_otus.txt", row=1, header=T, sep="\t")
+# tmp_c <- tmp_c[,tmp_m$SampleID]
+# write.table(tmp_c, "data/soil/44766_clean_otus.txt", sep="\t", col.names=T, row.names=T)
 
 
