@@ -182,14 +182,15 @@ ord_s <- as.factor(meta_cecum$System)
 cecum_col = cecum_col1[ord_c]; cecum_shp = cecum_shp1[ord_s]
 
 # MAGIC dataset
-magic_c <- read.table("data/magic/mycleaned_magic_counts.txt", row=1, header=T, sep="\t")
 magic_n <- read.table("data/magic/mycleaned_magic_norm.txt", row=1, header=T, sep="\t")
-meta_magic <- read.table("data/magic/mycleaned_magic_metadata.txt", row=1, header=T, sep="\t")
+meta_magic <- read.table("data/magic/clean_metafile.txt", header=T, sep="\t")
+rownames(meta_magic) <- meta_magic$Sample_ID
+meta_magic <- meta_magic[colnames(magic_n),]
+meta_magic$Timeline_Weeks <- as.integer(meta_magic$Timeline_Weeks)
 ## refine dataset
 meta_magic$age_grp <- cut(meta_magic$Timeline_Weeks, breaks = c(2,5,13,25,37,49,61,73,100)) # excluding first 2 weeks
 remove_idx <- which(is.na(meta_magic$age_grp) | is.na(meta_magic$currentfeed_bf))           # refine to age set and breastfeeding info
 meta_magic <- meta_magic[-remove_idx,]
-magic_c <- magic_c[,-remove_idx]
 magic_n <- magic_n[,-remove_idx]
 ## colors and shapes
 magic_cols1 <- alpha(c("#ffb14e","#fa7b67","#cd34b5","#9d02d7","#0000ff","#009aa7","#40c557","#036003"),0.6)
@@ -234,7 +235,26 @@ for (dm in dist_list) {
 par(mfrow=c(1,1),mgp=c(3, 1, 0))
 ## note: most are correlated about the same, might want to pick jaccard (cor 0.924) b/c closest to paper
 
-# for magic: seems that Bray-Curtis is an ok place to start, but best is Aitchison
+# Turkey cecum data - Can't do all distances because only have bray curtis distances object
+
+# Guerrero Negro data
+par(mfrow=c(2,4),mgp=c(2.5, 1, 0))
+for (dm in dist_list) {
+  if (dm %in% c("bray","manhattan","aitchison")) {
+    dist_pcoa(t(gn_n), method=dm, depth_cols, depth_cols, 16, flippc2 = T)
+  } else{
+    dist_pcoa(t(gn_n), method=dm, depth_cols, depth_cols, 16)
+  }
+}
+par(mfrow=c(1,1),mgp=c(3, 1, 0))
+
+
+# MAGIC data: seems that Bray-Curtis is an ok place to start, but best is Aitchison
+par(mfrow=c(2,4),mgp=c(2.5, 1, 0))
+for (dm in dist_list) {
+  dist_pcoa(t(magic_n), method=dm, magic_cols, magic_cols, 16)
+}
+par(mfrow=c(1,1),mgp=c(3, 1, 0))
 
 
 ##### Try every Ordination & "best" dist/diss #####
@@ -276,6 +296,88 @@ points(soil_rda, col=soil_bor, bg=soil_fil, pch=soil_shp, cex=3)
 text(soil_rda, dis="cn", cex=1)
 title("db-RDA", cex.main=2)
 par(mfrow=c(1,1),mgp=c(3, 1, 0))
+
+# Turkey Cecum (Bray-Curtis dissimilarity)
+cecum_pc <- cmdscale(cecum_d, k=2, eig=T)                               # PCoA
+cecum_nmds <- metaMDS(cecum_d, k=2, try=20, trymax=50, maxit=500)       # NMDS
+cecum_tsne <- Rtsne(cecum_d, is_distance=T, dims=3, perplexity=20)      # t-SNE
+cecum_rda <- dbrda(cecum_d ~ System + Collection, data=meta_cecum)      # constrained
+(fit <- envfit(cecum_rda, meta_cecum[,c(3,4)], perm = 999))
+par(mfrow=c(2,2),mgp=c(2.5, 1, 0))
+ord_plot(cecum_pc$points*-1, "PCoA", cecum_col, cecum_col, cecum_shp)
+ord_plot(cecum_nmds$points, "NMDS", cecum_col, cecum_col, cecum_shp)
+ord_plot(cecum_tsne$Y, "t-SNE", cecum_col, cecum_col, cecum_shp)
+plot(cecum_rda, type="n", xlab="dbRDA 1", ylab="MDS 1", cex.lab=1.5)
+points(cecum_rda, col=cecum_col, bg=cecum_col, pch=cecum_shp, cex=3)
+text(cecum_rda, dis="cn", cex=1)
+title("db-RDA", cex.main=2)
+par(mfrow=c(1,1),mgp=c(3, 1, 0))
+
+# Guerrero Negro (Jaccard dissimilarity)
+gn_d <- vegdist(t(gn_n), method="jaccard")
+gn_pc <- cmdscale(gn_d, k=2, eig=T)                               # PCoA
+gn_nmds <- metaMDS(gn_d, k=2, try=20, trymax=50, maxit=500)       # NMDS
+gn_tsne <- Rtsne(gn_d, is_distance=T, dims=3, perplexity=5)       # t-SNE
+gn_rda <- dbrda(gn_d ~ end_depth + layer, data=meta_gn)           # constrained
+(fit <- envfit(gn_rda, meta_gn[,c(30,40)], perm = 999))
+par(mfrow=c(2,2),mgp=c(2.5, 1, 0))
+ord_plot(gn_pc$points*-1, "PCoA", depth_cols, depth_cols, 16, flip1 = T, flip2=T)
+ord_plot(gn_nmds$points, "NMDS", depth_cols, depth_cols, 16)
+ord_plot(gn_tsne$Y, "t-SNE", depth_cols, depth_cols, 16)
+plot(gn_rda, type="n", xlab="dbRDA 1", ylab="MDS 1", cex.lab=1.5)
+points(gn_rda, col=depth_cols, bg=depth_cols, pch=16, cex=3)
+text(gn_rda, dis="cn", cex=1)
+title("db-RDA", cex.main=2)
+par(mfrow=c(1,1),mgp=c(3, 1, 0))
+
+# MAGIC (Aitchison distance)
+magic_d <- vegdist(t(magic_n)+0.000001, method="aitchison")
+magic_pc <- cmdscale(magic_d, k=2, eig=T)                               # PCoA
+magic_nmds <- metaMDS(magic_d, k=2, try=20, trymax=50, maxit=500)       # NMDS
+magic_tsne <- Rtsne(magic_d, is_distance=T, dims=3, perplexity=30)      # t-SNE
+magic_rda <- dbrda(magic_d ~ Timeline_Weeks + currentfeed_bf, data=meta_magic) # constrained
+(fit <- envfit(magic_rda, meta_magic[,c(6,650)], perm = 999))
+par(mfrow=c(2,2),mgp=c(2.5, 1, 0))
+ord_plot(magic_pc$points*-1, "PCoA", magic_cols, magic_cols, magic_shp, flip1=T)
+ord_plot(magic_nmds$points, "NMDS", magic_cols, magic_cols, magic_shp)
+ord_plot(magic_tsne$Y, "t-SNE", magic_cols, magic_cols, magic_shp)
+plot(magic_rda, type="n", xlab="dbRDA 1", ylab="MDS 1", cex.lab=1.5)
+points(magic_rda, col=magic_cols, bg=magic_cols, pch=magic_shp, cex=3)
+text(magic_rda, dis="cn", cex=1)
+title("db-RDA", cex.main=2)
+par(mfrow=c(1,1),mgp=c(3, 1, 0))
+
+
+
+##### Uneven Gradient #####
+# Select uneven samples
+select_uneven <- c(seq(1,10,2),15,20,25,30,35,seq(40,50,2))
+select_uneven <- c(select_uneven, select_uneven+50)
+uneven <- sim_n[select_uneven,]
+uneven_d <- vegdist(uneven, method="bray")
+# Visualize
+uneven_pc <- cmdscale(uneven_d, k=2, eig=T)
+plot(uneven_pc$points, col=sim_cols[select_uneven], pch=16, cex=3,
+     xlab=paste0("PC 1 [",calc.perc.var(uneven_pc$eig, 1),"%]"),
+     ylab=paste0("PC 1 [",calc.perc.var(uneven_pc$eig, 2),"%]"),
+     main="Uneven Sampling")
+# try LGD w/ smoothing
+uneven_out <- get_lgd(uneven_d, meta_sim$gradient[select_uneven]) # best r found: 0.8 (maximum)
+uneven_wtd <- get_wmeans(uneven_out$lgdlist, uneven_out$bestidx, uneven_out$rvals, "uneven gradient")
+uneven_lgd_pc <- cmdscale(uneven_wtd, k=2, eig=T)
+lims=c(min(uneven_lgd_pc$points), max(uneven_lgd_pc$points))
+plot(uneven_lgd_pc$points, col=sim_cols[select_uneven], pch=16, cex=3,
+     xlab=paste0("PC 1 [",calc.perc.var(uneven_lgd_pc$eig, 1),"%]"),
+     ylab=paste0("PC 1 [",calc.perc.var(uneven_lgd_pc$eig, 2),"%]"),
+     main="Uneven Sampling w/ LGD smoothing", xlim=lims, ylim=lims)
+# try LGD w/o smoothing
+uneven_lgd <- lg.dist(uneven_d, neighborhood.radius=0.8)
+uneven_lgd_pc <- cmdscale(uneven_lgd, k=2, eig=T)
+lims=c(min(uneven_lgd_pc$points), max(uneven_lgd_pc$points))
+plot(uneven_lgd_pc$points, col=sim_cols[select_uneven], pch=16, cex=3,
+     xlab=paste0("PC 1 [",calc.perc.var(uneven_lgd_pc$eig, 1),"%]"),
+     ylab=paste0("PC 1 [",calc.perc.var(uneven_lgd_pc$eig, 2),"%]"),
+     main="Uneven Sampling w/ LGD (r=0.8)", xlim=lims, ylim=lims)
 
 
 
@@ -405,13 +507,16 @@ intract_plots <- function (g) {
 manipulate(intract_plots(g), g=slider(n,m,step=50))
 par(mfrow=c(1,1),mgp=c(3,1,0))
 
+
+
+##### SENS. ANALYSIS SHINY APP #####
 # Try again with Shiny to make it cleaner.
 library(shiny)
 # Define UI
 ui <- fluidPage(
   # Title
   titlePanel("Sliding length of simulated gradient."),
-  # Input: Gradient Length ----
+  # Input: Gradient Length
   sliderInput("g", "Gradient length:",
               min = 25, max = 1000,
               value = 25, step=25),
