@@ -6,119 +6,103 @@ library(stats)
 library(plot.matrix)
 library(vegan)
 library(scales)
+library(gtools)
 set.seed(125)
+
+
+# playing around with the cluster
+# what do real samples look like? Let's consider the Soil dataset
+soil <- read.delim("data/soil/44766_clean_otus_norm.txt", sep="\t", row=1, header=T) # loading soil dataset
+soil <- soil[,runif(10, min=1, max=ncol(soil))]
+soil <- soil[rowSums(soil) > 0,]
+plot(density(soil[,1]), main="Soil Samples", type="l", lwd=1, col=alpha("blue",0.4), ylim=c(0,800))
+for (c in 2:10) {
+  lines(density(soil[,c]), lwd=1, col=alpha("blue",0.4))
+}
+legend(x=0.01, y=450, legend=c("Sample Distribution"), lwd=1, col="blue")
+# can we emulate this with a beta distribution?
+len_x <- seq(0,1,length.out=50)
+prior <- dbeta(len_x, 1, 20)
+plot(len_x, prior, type="l", lwd=3, main="Beta Distribution & Dirichlet Samples",
+     xlab="Proportion of Sample", ylab="Frequency") # curve of prior distribution used
+mysample <- rbeta(len_x, 1, 20) # sample the same curve
+lines(density(mysample), lty="dashed", lwd=3, col="purple") # distribution of sample from beta
+# what about other samples if we use this as input to dirichlet?
+conf <- 10
+mydirichlet <- rdirichlet(20, mysample*conf) # 20 dirichlet samples
+mydirichlet[mydirichlet < .Machine$double.eps] <- 0
+rowSums(mydirichlet)
+for (row in 1:20) {
+  lines(density(mydirichlet[row,],n=16), pch=16, cex=2, col=alpha("purple",0.2))
+}
+legend(x=0.4, y=12, legend=c("Beta(1,20)","Random Beta Sample","Dirichlet Samples"),
+       lty=c("solid","dashed","solid"), lwd=c(3,3,1), col=c("black","purple","purple"))
+# make a sample and visualize it
+myset <- rbind(mysample/sum(mysample), mydirichlet)
+heatmap(myset, col=topo.colors(254), Rowv=NA)
+legend(x="right", legend=c("low","  |","  |","  |","high"), fill=topo.colors(5))
+
+
 
 ##### Function to create clusters dataset #####
 # Create nclust clusters from nsamp samples
 ## note: balanced group sizes, but could add another parameter for inbalanced groups
-create_clusters <- function (nsamp=90, nclust=3, min_n_otu=150, overlap=0, beta_ab=c(4,8), random_deviates=F) {
-  # Initialize sample sizes
-  if (overlap > 0 & overlap < 1) {
-    notu_overlap <- min_n_otu * overlap                 # maximum number of overlapping OTUs
-    notu_each <- max(c(50, round(min_n_otu / nclust)))  # approx. number of otus each sample
-    notu_each <- notu_each + round((notu_overlap * (nclust-1)) / nclust) # adjust for overlap
-    ncol_otu <- (notu_each * nclust) - (notu_overlap * (nclust-1))
-  } else if (overlap > 1) {
-    stop("overlap parameter must be a value between 0 and 1.")
-  } else {
-    notu_overlap <- 0                                   # no overlap case
-    notu_each <- max(c(50, round(min_n_otu / nclust)))  # approx. number of otus each sample
-    ncol_otu <- notu_each * nclust
-  }
-  # Initialize data matrix
-  len_x <- seq(0, 1, length.out=1000 )                  # x values for the beta function
-  matrix <- matrix(data=0, nrow=nsamp, ncol=ncol_otu)   # empty matrix to fill with samples
-  sample_breaks <- c(rep(1:nclust, each=nsamp/nclust), rep(nclust, nsamp %% nclust))
-  col_breaks <- lapply(seq(1,ncol_otu, by=notu_each - notu_overlap), function (start) {seq(start, start+notu_each-1, by=1)})
-  cols <- lapply(sample_breaks, function (x) {col_breaks[[x]]})
-  # Sampling: beta distribution to approximate a real microbiome dataset
-  for (i in 1:nsamp) {
-    if (random_deviates == T) {
-      pdf <- density(rbeta(len_x, beta_ab[1], beta_ab[2]))$y  # create PDF from beta distribution
-    } else {
-      pdf <- dbeta(len_x, beta_ab[1], beta_ab[2])             # create PDF from beta distribution
-    }
-    curr_samp <- pdf[sort(runif(notu_each, 1, length(pdf)))]  # random sample from PDF
-    curr_samp[curr_samp < 0.001] <- 0                         # get rid of low abundance OTUS
-    curr_samp <- curr_samp / sum(curr_samp)                   # normalize sample
-    matrix[ i, cols[[i]] ] <- curr_samp                       # add the sample to out matrix
+create_clusters <- function (minsamp=90, nclust=3, n_otu=500, beta_ab=c(1,20)) {
+  # What to do if overlap = T vs overlap = F??
+  # Initialize variables needed
+  nsamp_per <- ceiling(minsamp / nclust)    # number of samples per cluster
+  len_x <- seq(0, 1, length.out=n_otu)      # x values for the beta function
+  conf <- 10                                # confidence factor for dirichlet, currently built-in
+  matrix <- matrix(NA, nrow=0, ncol=n_otu)  # empty matrix to fill with samples
+  # Use beta distribution as prior to dirichlet of samples
+  for (c in 1:nclust) {
+    prior <- rbeta(len_x, beta_ab[1], beta_ab[2])
+    dir_samples <- rdirichlet(nsamp_per, prior * conf)
+    dir_samples[dir_samples < .Machine$double.eps] <- 0 # below machine epsilon set to 0
+    matrix <- rbind(matrix, dir_samples)
   }
   # Clean up matrix and return
   matrix <- matrix[rowSums(matrix) > 0,]  # remove empty rows (should not happen, but safety check)
   matrix <- matrix[,colSums(matrix) > 0]  # remove empty columns
   return(matrix)
 }
-# Plotting output : no overlap
-par(mar=c(5.1,4.1,4.1,4.1))
-mymat <- create_clusters(random_deviates=F)
-plot(mymat, col=c("yellow","green","cyan","royalblue","blue"), breaks=seq(0.000001, max(mymat), length.out=6),
-     main="Clusters (n=3) : beta(4,8)", border=NA, axis.col=list(cex.axis=0.8), axis.row=list(cex.axis=0.8),
-     key=list(cex.axis=0.8), fmt.key="%.3f")
-rmymat <- create_clusters(random_deviates=T)
-plot(rmymat, col=c("yellow","green","cyan","royalblue","blue"), breaks=seq(0.000001, max(rmymat), length.out=6),
-     main="Clusters (n=3) : rbeta(4,8) - Random Dev.", border=NA, axis.col=list(cex.axis=0.8), axis.row=list(cex.axis=0.8),
-     key=list(cex.axis=0.8), fmt.key="%.3f")
-# Plotting output : ~ 10% overlap
-tmymat <- create_clusters(overlap=0.1)
-plot(tmymat, col=c("yellow","green","cyan","royalblue","blue"), breaks=seq(0.000001, max(tmymat), length.out=6),
-     main="Clusters (n=3) : beta(4,8) - 10% Overlap", border=NA, axis.col=list(cex.axis=0.8), axis.row=list(cex.axis=0.8),
-     key=list(cex.axis=0.8), fmt.key="%.3f")
-# Plotting output : ~ 30% overlap
-omymat <- create_clusters(overlap=0.3)
-plot(omymat, col=c("yellow","green","cyan","royalblue","blue"), breaks=seq(0.000001, max(omymat), length.out=6),
-     main="Clusters (n=3) : beta(4,8) - 30% Overlap", border=NA, axis.col=list(cex.axis=0.8), axis.row=list(cex.axis=0.8),
-     key=list(cex.axis=0.8), fmt.key="%.3f")
-# Plotting output : ~50% overlap
-o2mymat <- create_clusters(overlap=0.5)
-plot(o2mymat, col=c("yellow","green","cyan","royalblue","blue"), breaks=seq(0.000001, max(o2mymat), length.out=6),
-     main="Clusters (n=3) : beta(4,8) - 50% Overlap", border=NA, axis.col=list(cex.axis=0.8), axis.row=list(cex.axis=0.8),
-     key=list(cex.axis=0.8), fmt.key="%.3f")
+# Plotting output
+mymat <- create_clusters()
+heatmap(mymat, Rowv=NA, col=c("white",topo.colors(49)))
+legend(x="right", legend=c("low","  |","  |","  |","high"), fill=c("white",topo.colors(4)))
 
 
 # Ordination with these clusters
-par(mfrow=c(2,4),mar=c(4,2,2,2), mgp=c(0.5,0,0))
-## Defaults
-for (m in c("bray", "jaccard", "aitchison", "euclidean", "manhattan", "gower", "chisq", "canberra")) {
+my_distances <- c("bray", "jaccard", "aitchison", "euclidean", "manhattan", "gower", "chisq", "canberra")
+par(mfrow=c(2,4),mar=c(2,2,5,1), mgp=c(0.5,0,0))
+## Default parameters, all distances
+for (m in my_distances) {
   if (m == "aitchison") d <- vegdist(mymat+0.000000001, method=m)
   else d <- vegdist(mymat, method=m)
   pc <- cmdscale(d, k=2)
-  plot(pc[,1], pc[,2], pch=16, cex=2.5, col=alpha(rep(c("purple", "orange", "blue"), each=30),0.6),
-       main=m, xlab="PC 1", ylab="PC 2", asp=3)
+  plot(pc[,1], pc[,2], pch=16, cex=2, col=alpha(rep(c("purple", "orange", "blue"), each=30),0.6),
+       xlab="PC 1", ylab="PC 2", asp=1, xaxt="n", yaxt="n")
+  title(m, adj = 0.5, line = 1)
 }
-mtext("Default parameters", side = 3, line = -21, outer = TRUE)
-## Random Deviates
-for (m in c("bray", "jaccard", "aitchison", "euclidean", "manhattan", "gower", "chisq", "canberra")) {
-  if (m == "aitchison") d <- vegdist(rmymat+0.000000001, method=m)
-  else d <- vegdist(rmymat, method=m)
-  pc <- cmdscale(d, k=2)
-  plot(pc[,1], pc[,2], pch=16, cex=2.5, col=alpha(rep(c("purple", "orange", "blue"), each=30),0.6),
-       main=m, xlab="PC 1", ylab="PC 2", asp=T)
-}
-## Overlap 10%
-for (m in c("bray", "jaccard", "aitchison", "euclidean", "manhattan", "gower", "chisq", "canberra")) {
-  if (m == "aitchison") d <- vegdist(tmymat+0.000000001, method=m)
-  else d <- vegdist(tmymat, method=m)
-  pc <- cmdscale(d, k=2)
-  plot(pc[,1], pc[,2], pch=16, cex=2.5, col=alpha(rep(c("purple", "orange", "blue"), each=30),0.6),
-       main=m, xlab="PC 1", ylab="PC 2", asp=T)
-}
-## Overlap 30%
-for (m in c("bray", "jaccard", "aitchison", "euclidean", "manhattan", "gower", "chisq", "canberra")) {
-  if (m == "aitchison") d <- vegdist(omymat+0.000000001, method=m)
-  else d <- vegdist(omymat, method=m)
-  pc <- cmdscale(d, k=2)
-  plot(pc[,1], pc[,2], pch=16, cex=2.5, col=alpha(rep(c("purple", "orange", "blue"), each=30),0.6),
-       main=m, xlab="PC 1", ylab="PC 2", asp=T)
-}
-## Overlap 50%
-for (m in c("bray", "jaccard", "aitchison", "euclidean", "manhattan", "gower", "chisq", "canberra")) {
-  if (m == "aitchison") d <- vegdist(o2mymat+0.000000001, method=m)
-  else d <- vegdist(o2mymat, method=m)
-  pc <- cmdscale(d, k=2)
-  plot(pc[,1], pc[,2], pch=16, cex=2.5, col=alpha(rep(c("purple", "orange", "blue"), each=30),0.6),
-       main=m, xlab="PC 1", ylab="PC 2", asp=T)
-}
+mtext("Default parameters", side = 3, line = -2, outer = TRUE, cex=1.5)
 par(mfrow=c(1,1),mar=c(5.1,4.1,4.1,2.1), mgp=c(3,1,0))
+
+
+# Distribution of distances
+par(mfrow=c(2,4),mar=c(3,3,5,1), mgp=c(1.5,0.5,0))
+for (m in my_distances) {
+  if (m == "aitchison") {
+    d <- vegdist(mymat+0.000000001, method=m)
+  } else {
+    d <- vegdist(mymat, method=m)
+  }
+  plot(density(d), lwd=3, col="black", main="", xlab="Value", ylab="Freq")
+  title(m, adj=0.5, line=1)
+}
+mtext("Distance Distributions (default params)", side = 3, line = -2, outer = TRUE, cex=1.5)
+
+
+# What happens after we apply LGD?
 
 
 
@@ -147,3 +131,4 @@ par(mfrow=c(1,1),mar=c(5.1,4.1,4.1,2.1), mgp=c(3,1,0))
 # plot(qbeta(len_x, 6,8), main="Quantile Func: qbeta(6,8)", pch=16, cex=2, xlab="", ylab="")
 # plot(density(rbeta(len_x, 6,8)), main="Random Deviates: rbeta(6,8)", lwd=3, xlab="", ylab="")
 # par(mar=c(5.1,4.1,4.1,2.1), mfrow=c(1,1))
+
